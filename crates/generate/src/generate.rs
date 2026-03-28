@@ -359,6 +359,39 @@ pub fn generate_parser_for_grammar(
     Ok((input_grammar.name, parser.c_code))
 }
 
+/// Generate both C and Rust parser code from the same grammar JSON.
+///
+/// Returns `(name, c_code, rust_code)`. Useful for testing that both renderers
+/// produce semantically equivalent output from the same intermediate tables.
+pub fn generate_parser_for_grammar_both(
+    grammar_json: &str,
+    semantic_version: Option<(u8, u8, u8)>,
+) -> GenerateResult<(String, String, String)> {
+    let grammar_json = JSON_COMMENT_REGEX.replace_all(grammar_json, "\n");
+    let input_grammar = parse_grammar(&grammar_json)?;
+    let c_parser = generate_parser_for_grammar_with_opts(
+        &input_grammar,
+        LANGUAGE_VERSION,
+        semantic_version,
+        None,
+        OptLevel::empty(),
+        false,
+    )?;
+    let rust_parser = generate_parser_for_grammar_with_opts(
+        &input_grammar,
+        LANGUAGE_VERSION,
+        semantic_version,
+        None,
+        OptLevel::empty(),
+        true,
+    )?;
+    Ok((
+        input_grammar.name,
+        c_parser.c_code,
+        rust_parser.rust_code.unwrap_or_default(),
+    ))
+}
+
 fn generate_node_types_from_grammar(input_grammar: &InputGrammar) -> GenerateResult<JSONOutput> {
     let (syntax_grammar, lexical_grammar, inlines, simple_aliases) =
         prepare_grammar(input_grammar)?;
