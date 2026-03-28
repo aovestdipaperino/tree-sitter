@@ -31,6 +31,7 @@ mod prepare_grammar;
 #[cfg(feature = "qjs-rt")]
 mod quickjs;
 mod render;
+mod render_rust;
 mod rules;
 mod tables;
 
@@ -44,6 +45,7 @@ pub use prepare_grammar::PrepareGrammarError;
 use prepare_grammar::prepare_grammar;
 use render::render_c_code;
 pub use render::{ABI_VERSION_MAX, ABI_VERSION_MIN, RenderError};
+use render_rust::render_rust_code;
 
 static JSON_COMMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     RegexBuilder::new("^\\s*//.*")
@@ -64,6 +66,7 @@ struct JSONOutput {
 
 struct GeneratedParser {
     c_code: String,
+    rust_code: Option<String>,
     #[cfg(feature = "load")]
     node_types_json: String,
 }
@@ -241,6 +244,7 @@ pub fn generate_parser_in_directory<T, U, V>(
     js_runtime: Option<&str>,
     generate_parser: bool,
     optimizations: OptLevel,
+    output_rust: bool,
 ) -> GenerateResult<()>
 where
     T: Into<PathBuf>,
@@ -310,6 +314,7 @@ where
     // Generate the parser and related files.
     let GeneratedParser {
         c_code,
+        rust_code,
         node_types_json,
     } = generate_parser_for_grammar_with_opts(
         &input_grammar,
@@ -317,15 +322,22 @@ where
         semantic_version.map(|v| (v.major as u8, v.minor as u8, v.patch as u8)),
         report_symbol_name,
         optimizations,
+        output_rust,
     )?;
 
-    write_file(&src_path.join("parser.c"), c_code)?;
+    if output_rust {
+        if let Some(rust_code) = rust_code {
+            write_file(&src_path.join("parser.rs"), rust_code)?;
+        }
+    } else {
+        write_file(&src_path.join("parser.c"), c_code)?;
+        fs::create_dir_all(&header_path)
+            .map_err(|e| GenerateError::IO(IoError::new(&e, Some(header_path.as_path()))))?;
+        write_file(&header_path.join("alloc.h"), ALLOC_HEADER)?;
+        write_file(&header_path.join("array.h"), ARRAY_HEADER)?;
+        write_file(&header_path.join("parser.h"), PARSER_HEADER)?;
+    }
     write_file(&src_path.join("node-types.json"), node_types_json)?;
-    fs::create_dir_all(&header_path)
-        .map_err(|e| GenerateError::IO(IoError::new(&e, Some(header_path.as_path()))))?;
-    write_file(&header_path.join("alloc.h"), ALLOC_HEADER)?;
-    write_file(&header_path.join("array.h"), ARRAY_HEADER)?;
-    write_file(&header_path.join("parser.h"), PARSER_HEADER)?;
 
     Ok(())
 }
@@ -342,6 +354,7 @@ pub fn generate_parser_for_grammar(
         semantic_version,
         None,
         OptLevel::empty(),
+        false,
     )?;
     Ok((input_grammar.name, parser.c_code))
 }
@@ -376,6 +389,7 @@ fn generate_parser_for_grammar_with_opts(
     semantic_version: Option<(u8, u8, u8)>,
     report_symbol_name: Option<&str>,
     optimizations: OptLevel,
+    output_rust: bool,
 ) -> GenerateResult<GeneratedParser> {
     let JSONOutput {
         syntax_grammar,
@@ -397,21 +411,41 @@ fn generate_parser_for_grammar_with_opts(
         report_symbol_name,
         optimizations,
     )?;
-    let c_code = render_c_code(
-        &input_grammar.name,
-        tables,
-        syntax_grammar,
-        lexical_grammar,
-        simple_aliases,
-        abi_version,
-        semantic_version,
-        supertype_symbol_map,
-    )?;
-    Ok(GeneratedParser {
-        c_code,
-        #[cfg(feature = "load")]
-        node_types_json,
-    })
+    if output_rust {
+        let rust_code = render_rust_code(
+            &input_grammar.name,
+            tables,
+            syntax_grammar,
+            lexical_grammar,
+            simple_aliases,
+            abi_version,
+            semantic_version,
+            supertype_symbol_map,
+        )?;
+        Ok(GeneratedParser {
+            c_code: String::new(),
+            rust_code: Some(rust_code),
+            #[cfg(feature = "load")]
+            node_types_json,
+        })
+    } else {
+        let c_code = render_c_code(
+            &input_grammar.name,
+            tables,
+            syntax_grammar,
+            lexical_grammar,
+            simple_aliases,
+            abi_version,
+            semantic_version,
+            supertype_symbol_map,
+        )?;
+        Ok(GeneratedParser {
+            c_code,
+            rust_code: None,
+            #[cfg(feature = "load")]
+            node_types_json,
+        })
+    }
 }
 
 /// This will read the `tree-sitter.json` config file and attempt to extract the version.

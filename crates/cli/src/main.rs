@@ -168,6 +168,10 @@ struct Generate {
     /// the merging of compatible parse states.
     #[arg(long)]
     pub disable_optimizations: bool,
+
+    /// Generate Rust code instead of C
+    #[arg(long)]
+    pub rust: bool,
 }
 
 #[derive(Args)]
@@ -961,6 +965,7 @@ impl Generate {
             } else {
                 OptLevel::default()
             },
+            self.rust,
         ) {
             if json_summary {
                 eprintln!("{}", serde_json::to_string_pretty(&err)?);
