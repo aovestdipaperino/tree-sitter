@@ -7,6 +7,13 @@
 use regex::Regex;
 use std::{collections::HashMap, path::Path};
 
+/// Normalize string escaping differences between C and Rust.
+/// C escapes `?` as `\?` (trigraph avoidance) and uses `\uNNNN` without braces,
+/// while Rust uses `?` literally and `\u{NNNN}` with braces.
+fn normalize_symbol_name(s: &str) -> String {
+    s.replace("\\?", "?")
+}
+
 /// Extract `#define NAME value` from C code.
 fn extract_c_defines(c_code: &str) -> HashMap<String, String> {
     let re = Regex::new(r"#define\s+(\w+)\s+(\d+)").unwrap();
@@ -180,8 +187,10 @@ fn assert_parity(grammar_json: &str, test_name: &str) {
         rust_symbols.len()
     );
     for (i, (c_sym, rs_sym)) in c_symbols.iter().zip(rust_symbols.iter()).enumerate() {
+        let c_normalized = normalize_symbol_name(c_sym);
+        let rs_normalized = normalize_symbol_name(rs_sym);
         assert_eq!(
-            c_sym, rs_sym,
+            c_normalized, rs_normalized,
             "[{test_name}] Symbol name mismatch at index {i}: C={c_sym:?}, Rust={rs_sym:?}"
         );
     }
