@@ -374,7 +374,7 @@ pub fn generate_parser_for_grammar_both(
         LANGUAGE_VERSION,
         semantic_version,
         None,
-        OptLevel::empty(),
+        OptLevel::default(),
         false,
     )?;
     let rust_parser = generate_parser_for_grammar_with_opts(
@@ -382,7 +382,7 @@ pub fn generate_parser_for_grammar_both(
         LANGUAGE_VERSION,
         semantic_version,
         None,
-        OptLevel::empty(),
+        OptLevel::default(),
         true,
     )?;
     Ok((
