@@ -1,6 +1,6 @@
 log*.html
 .direnv
-
+localonly/**
 .idea
 *.xcodeproj
 .vscode
