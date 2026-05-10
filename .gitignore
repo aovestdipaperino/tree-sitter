@@ -38,3 +38,4 @@ build
 zig-*
 
 /result
+.tokensave/
